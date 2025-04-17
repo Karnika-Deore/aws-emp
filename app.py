@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect
 from pymysql import connections
-import MySQLdb
+
 import boto3
 import os
 from config import *
