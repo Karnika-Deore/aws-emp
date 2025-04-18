@@ -38,6 +38,8 @@ def add_employee():
     location = request.form['location']
     image = request.files['image']
 
+    cursor = None
+
     if image.filename == "":
         return "Please select a file."
 
@@ -69,7 +71,8 @@ def add_employee():
     except Exception as e:
         return render_template('error.html', message="Database/S3 Error: " + str(e))
     finally:
-        cursor.close()
+         if cursor:
+             cursor.close()
 
 
 if __name__ == "__main__":
