@@ -1,10 +1,8 @@
 from flask import Flask, render_template, request, redirect
 from pymysql import connections
-<<<<<<< HEAD
 
-=======
 from botocore.exceptions import NoCredentialsError, ClientError
->>>>>>> 44783cf (Updated app.py with upload folder changes)
+
 import boto3
 import os
 from config import *
@@ -62,7 +60,7 @@ def add_employee():
         db_conn.commit()
         cursor.close()
 
-        return redirect('/')
+        return render_template('success.html')
     
     except NoCredentialsError:
         return render_template('error.html', message="Unable to update database: Missing AWS credentials.")
