@@ -1,11 +1,18 @@
 from flask import Flask, render_template, request, redirect
 from pymysql import connections
+<<<<<<< HEAD
 
+=======
+from botocore.exceptions import NoCredentialsError, ClientError
+>>>>>>> 44783cf (Updated app.py with upload folder changes)
 import boto3
 import os
 from config import *
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+
+
 
 bucket = custombucket
 region = customregion
@@ -41,18 +48,29 @@ def add_employee():
     location = request.form['location']
     image = request.files['image']
 
-    if image:
-        img_filename = f"{empid}_{image.filename}"
-        image.save(os.path.join(app.config['UPLOAD_FOLDER'], img_filename))
-        s3.upload_file(os.path.join(app.config['UPLOAD_FOLDER'], img_filename), custombucket, img_filename)
+    try:
+        if image:
+            img_filename = f"{empid}_{image.filename}"
+            image_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), app.config['UPLOAD_FOLDER'], img_filename)
 
-    cursor = db_conn.cursor()
-    cursor.execute("INSERT INTO employee (empid, fname, lname, pri_skill, location) VALUES (%s, %s, %s, %s, %s)",
-                   (empid, fname, lname, pri_skill, location))
-    db_conn.commit()
-    cursor.close()
+            image.save(image_path)
+            s3.upload_file(image_path, bucket, img_filename)
 
-    return redirect('/')
+        cursor = db_conn.cursor()
+        cursor.execute("INSERT INTO employee (empid, fname, lname, pri_skill, location) VALUES (%s, %s, %s, %s, %s)",
+                       (empid, fname, lname, pri_skill, location))
+        db_conn.commit()
+        cursor.close()
+
+        return redirect('/')
+    
+    except NoCredentialsError:
+        return render_template('error.html', message="Unable to update database: Missing AWS credentials.")
+    except ClientError as e:
+        return render_template('error.html', message="AWS Client Error: " + str(e))
+    except Exception as e:
+        return render_template('error.html', message="Unable to update database: " + str(e))
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
