@@ -1,8 +1,6 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request
 from pymysql import connections
-
 from botocore.exceptions import NoCredentialsError, ClientError
-
 import boto3
 import os
 from config import *
@@ -10,15 +8,10 @@ from config import *
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
-
-
 bucket = custombucket
 region = customregion
 
-app.config['UPLOAD_FOLDER'] = 'uploads'
-
-s3 = boto3.client('s3')
-
+# Connect to the database
 db_conn = connections.Connection(
     host=customhost,
     port=3306,
@@ -26,18 +19,17 @@ db_conn = connections.Connection(
     password=custompass,
     db=customdb
 )
+
 output = {}
 table = 'employee'
 
 
-
-
-
-@app.route('/')
+@app.route("/", methods=['GET'])
 def index():
     return render_template('index.html')
 
-@app.route('/add_employee', methods=['POST'])
+
+@app.route("/add_employee", methods=['POST'])
 def add_employee():
     empid = request.form['empid']
     fname = request.form['fname']
@@ -46,30 +38,39 @@ def add_employee():
     location = request.form['location']
     image = request.files['image']
 
+    if image.filename == "":
+        return "Please select a file."
+
     try:
-        if image:
-            img_filename = f"{empid}_{image.filename}"
-            image_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), app.config['UPLOAD_FOLDER'], img_filename)
+        # Save image locally
+        img_filename = f"{empid}_{image.filename}"
+        image_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), app.config['UPLOAD_FOLDER'], img_filename)
+        image.save(image_path)
 
-            image.save(image_path)
-            s3.upload_file(image_path, bucket, img_filename)
+        # Upload to S3
+        s3 = boto3.client('s3')
+        s3.upload_file(image_path, bucket, img_filename)
 
+        # Insert into database
+        insert_sql = "INSERT INTO employee (empid, fname, lname, pri_skill, location) VALUES (%s, %s, %s, %s, %s)"
         cursor = db_conn.cursor()
-        cursor.execute("INSERT INTO employee (empid, fname, lname, pri_skill, location) VALUES (%s, %s, %s, %s, %s)",
-                       (empid, fname, lname, pri_skill, location))
+        cursor.execute(insert_sql, (empid, fname, lname, pri_skill, location))
         db_conn.commit()
-        cursor.close()
 
-        return render_template('success.html')
-    
+        emp_name = f"{fname} {lname}"
+        print("Data inserted into MySQL and image uploaded to S3 successfully.")
+
+        return render_template('success.html', name=emp_name)
+
     except NoCredentialsError:
-        return render_template('error.html', message="Unable to update database: Missing AWS credentials.")
+        return render_template('error.html', message="Missing AWS credentials.")
     except ClientError as e:
         return render_template('error.html', message="AWS Client Error: " + str(e))
     except Exception as e:
-        return render_template('error.html', message="Unable to update database: " + str(e))
+        return render_template('error.html', message="Database/S3 Error: " + str(e))
+    finally:
+        cursor.close()
 
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
-
